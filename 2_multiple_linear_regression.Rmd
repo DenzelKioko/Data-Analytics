@@ -1,0 +1,407 @@
+---
+title: "Multiple Linear Regression"
+author: "Denzel Wambua"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: 
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    fig_width: 5
+    fig_height: 5
+    fig_crop: false
+    keep_tex: true
+    latex_engine: xelatex
+  html_notebook:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    fig_width: 5
+    self_contained: false
+  html_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    fig_width: 5
+    fig_height: 5
+    self_contained: false
+    keep_md: true
+  word_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    fig_width: 5
+    keep_md: true
+---
+
+```{r setup_chunk, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!"pacman" %in% installed.packages()[, "Package"]) {
+  install.packages("pacman", dependencies = TRUE)
+  library("pacman", character.only = TRUE)
+}
+
+pacman::p_load("here")
+
+knitr::opts_knit$set(root.dir = here::here())
+```
+
+# Load the Dataset
+
+```{r load_dataset, echo=TRUE, message=FALSE, warning=FALSE}
+pacman::p_load("readr")
+
+advertising_data <- read_csv("./data/advertising.csv")
+head(advertising_data)
+```
+
+# Initial EDA
+
+[**View the Dimensions**]{.underline}
+
+The number of observations and the number of variables.
+
+```{r show_dimensions, echo=TRUE, message=FALSE, warning=FALSE}
+dim(advertising_data)
+```
+
+[**View the Data Types**]{.underline}
+
+```{r show_data_types_1, echo=TRUE, message=FALSE, warning=FALSE}
+sapply(advertising_data, class)
+```
+
+```{r show_data_types_2, echo=TRUE, message=FALSE, warning=FALSE}
+str(advertising_data)
+```
+
+[**Descriptive Statistics**]{.underline}
+
+## [**Measures of Frequency**]{.underline}
+
+This is applicable in cases where you have categorical variables, e.g., 60% of the observations are male and 40% are female (2 categories).
+
+## [**Measures of Central Tendency**]{.underline}
+
+The median and the mean of each numeric variable:
+
+```{r central_tendency, echo=TRUE, message=FALSE, warning=FALSE}
+summary(advertising_data)
+```
+
+## [**Measures of Distribution**]{.underline}
+
+Measuring the variability in the dataset is important because the amount of variability determines **how well you can generalize** results from the sample to a new observation in the population.
+
+Low variability is ideal because it means that you can better predict information about the population based on the sample data. High variability means that the values are less consistent, thus making it harder to make predictions.
+
+### **Variance**
+
+```{r distribution_variance, echo=TRUE, message=FALSE, warning=FALSE}
+sapply(advertising_data[,], var)
+```
+
+### **Standard Deviation**
+
+```{r distribution_standard_deviation, echo=TRUE, message=FALSE, warning=FALSE}
+sapply(advertising_data[,], sd)
+```
+
+### **Kurtosis**
+
+The Kurtosis informs us of how often outliers occur in the results. There are different formulas for calculating kurtosis. Specifying “type = 2” allows us to use the 2nd formula which is the same kurtosis formula used in other statistical software like SPSS and SAS.
+
+In “type = 2” (used in SPSS and SAS):
+
+1.  Kurtosis \< 3 implies a low number of outliers
+
+2.  Kurtosis = 3 implies a medium number of outliers
+
+3.  Kurtosis \> 3 implies a high number of outliers
+
+```{r distribution_kurtosis, echo=TRUE, message=FALSE, warning=FALSE}
+pacman::p_load("e1071")
+sapply(advertising_data[,],  kurtosis, type = 2)
+```
+
+### **Skewness**
+
+The skewness is used to identify the asymmetry of the distribution of results. Similar to kurtosis, there are several ways of computing the skewness.
+
+Using “type = 2” (common in other statistical software like SPSS and SAS) can be interpreted as:
+
+1.  Skewness between -0.4 and 0.4 (inclusive) implies that there is no skew in the distribution of results; the distribution of results is symmetrical; it is a normal distribution; a Gaussian distribution.
+
+2.  Skewness above 0.4 implies a positive skew; a right-skewed distribution.
+
+3.  Skewness below -0.4 implies a negative skew; a left-skewed distribution.
+
+```{r distribution_skewness, echo=TRUE, message=FALSE, warning=FALSE}
+sapply(advertising_data[,], skewness, type = 2)
+```
+
+## [**Measures of Relationship**]{.underline}
+
+### **Covariance**
+
+Covariance is a statistical measure that indicates the direction of the linear relationship between two variables. It assesses whether increases in one variable correspond to increases or decreases in another.​
+
+-   **Positive Covariance:** When one variable increases, the other tends to increase as well.
+
+-   **Negative Covariance:** When one variable increases, the other tends to decrease.
+
+-   **Zero Covariance:** No linear relationship exists between the variables.
+
+While covariance indicates the direction of a relationship, it does not convey the strength or consistency of the relationship. The correlation coefficient is used to indicate the strength of the relationship.
+
+```{r distribution_covariance, echo=TRUE, message=FALSE, warning=FALSE}
+cov(advertising_data, method = "spearman")
+```
+
+### **Correlation**
+
+A strong correlation between variables enables us to better predict the value of the dependent variable using the value of the independent variable. However, a weak correlation between two variables does not help us to predict the value of the dependent variable from the value of the independent variable. This is useful only if there is a linear association between the variables.
+
+We can measure the statistical significance of the correlation using Spearman's rank correlation *rho*. This shows us if the variables are significantly monotonically related. A monotonic relationship between two variables implies that as one variable increases, the other variable either consistently increases or consistently decreases. The key characteristic is the preservation of the direction of change, though the rate of change may vary.
+
+**Option 1:** Conduct a correlation test between the dependent variable and each independent variable one at a time.
+
+```{r distribution_correlation_1, echo=TRUE, message=FALSE, warning=FALSE}
+cor.test(advertising_data$Sales, advertising_data$YouTube, method = "spearman")
+
+cor.test(advertising_data$Sales, advertising_data$TikTok, method = "spearman")
+
+cor.test(advertising_data$Sales, advertising_data$Facebook, method = "spearman")
+```
+
+**Option 2:** To view the correlation of all variables at the same time
+
+```{r distribution_correlation_2, echo=TRUE, message=FALSE, warning=FALSE}
+cor(advertising_data, method = "spearman")
+```
+
+## [**Basic Visualizations**]{.underline}
+
+### **Histogram**
+
+```{r visualization_histogram, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+par(mfrow = c(1, 2))
+for (i in 1:4) {
+  if (is.numeric(advertising_data[[i]])) {
+    hist(advertising_data[[i]],
+         main = names(advertising_data)[i],
+         xlab = names(advertising_data)[i])
+  } else {
+    message(paste("Column", names(advertising_data)[i], "is not numeric and will be skipped."))
+  }
+}
+```
+
+### **Box and Whisker Plot**
+
+```{r visualization_boxplot, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+# `boxplot()` This is the function used to plot the box and whisker plot visualization
+par(mfrow = c(1, 2))
+for (i in 1:4) {
+  if (is.numeric(advertising_data[[i]])) {
+    boxplot(advertising_data[[i]], main = names(advertising_data)[i])
+  } else {
+    message(paste("Column", names(advertising_data)[i], "is not numeric and will be skipped."))
+  }
+}
+```
+
+### **Missing Data Plot**
+
+```{r missing_data_plot, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+pacman::p_load("Amelia")
+
+missmap(advertising_data, col = c("red", "grey"), legend = TRUE)
+```
+
+### **Correlation Plot**
+
+```{r correlation_plot, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+pacman::p_load("ggcorrplot")
+
+ggcorrplot(cor(advertising_data[,]))
+```
+
+### **Scatter Plot**
+
+```{r scatter_plot_1, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+pacman::p_load("corrplot")
+
+pairs(advertising_data$Sales ~ ., data = advertising_data, col = advertising_data$Sales)
+```
+
+```{r scatter_plot_2, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+pacman::p_load("ggplot2")
+ggplot(advertising_data,
+       aes(x = YouTube, y = Sales)) + 
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(
+    title = "Relationship between Sales Revenue and \nExpenditure on YouTube Marketing",
+    x = "Expenditure",
+    y = "Sales"
+  )
+```
+
+```{r scatter_plot_3, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+pacman::p_load("dplyr")
+advertising_data_composite <- advertising_data %>%
+  mutate(Total_Expenditure = YouTube + TikTok + Facebook)
+
+ggplot(advertising_data_composite,
+       aes(x = Total_Expenditure, y = Sales)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(
+    title = "Relationship between Sales Revenue and \nTotal Marketing Expenditure",
+    x = "Total Expenditure",
+    y = "Sales"
+  )
+```
+
+# Statistical Test
+
+We then apply a simultaneous multiple linear regression as a statistical test for regression. The term "simultaneous" refers to how the predictor variables are entered and considered in the statistical test. It means that all the predictor variables included in the model are entered and evaluated at the same time.
+
+```{r statistical_test_SLR, echo=TRUE, message=FALSE, warning=FALSE}
+mlr_test <- lm(Sales ~ YouTube + TikTok + Facebook, data = advertising_data)
+```
+
+View the summary of the model.
+
+```{r statistical_test_result, echo=TRUE, message=FALSE, warning=FALSE}
+summary(mlr_test)
+```
+
+To obtain a 95% confidence interval:
+
+```{r 95_confidence_interval, echo=TRUE, message=FALSE, warning=FALSE}
+confint(mlr_test, level = 0.95)
+```
+
+# Diagnostic EDA
+
+Diagnostic EDA is performed to validate that the regression assumptions are true with respect to the statistical test. Validating the regression assumption in turn ensures that the statistical tests applied are appropriate for the data and helps to prevent incorrect conclusions.
+
+## [**Test of Linearity**]{.underline}
+
+The test of linearity is used to assess whether the relationship between the dependent variables and the independent variables is linear. This is necessary given that linearity is one of the key assumptions of statistical tests of regression and verifying it is crucial for ensuring the validity of the model's estimates and predictions.
+
+A plot of the residuals versus the fitted values enables us to test for linearity. For the model to pass the test of linearity, there should be no pattern in the distribution of residuals and the residuals should be randomly placed around the 0.0 residual line, i.e., the residuals should randomly vary around the mean of the value of the response variable.
+
+```{r test_of_linearity, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+plot(mlr_test, which = 1)
+```
+
+## [**Test of Independence of Errors (Autocorrelation)**]{.underline}
+
+This test is necessary to confirm that each observation is independent of the other. It helps to identify **autocorrelation** that is introduced when the data is collected over a close period of time or when one observation is related to another observation. Autocorrelation leads to underestimated standard errors and inflated t-statistics. It can also make findings appear more significant than they actually are.
+
+The "**Durbin-Watson Test**" can be used as a test of independence of errors (test of autocorrelation). A Durbin-Watson statistic close to 2 suggests no autocorrelation, while values approaching 0 or 4 indicate positive or negative autocorrelation, respectively.
+
+-   The null hypothesis, H~0~, is that there is no autocorrelation
+
+-   The alternative hypothesis, H~a~, is that there is autocorrelation
+
+If the p-value of the Durbin-Watson statistic is greater than 0.05 then there is no evidence to reject the null hypothesis that "there is no autocorrelation". The results below show a p-value of 0.1573, therefore, the test of independence of errors around the regression line passes.
+
+```{r test_of_independence_of_errors, echo=TRUE, message=FALSE, warning=FALSE}
+pacman::p_load("lmtest")
+dwtest(mlr_test)
+```
+
+## [**Test of Normality**]{.underline}
+
+The test of normality assesses whether the residuals are normally distributed, i.e., most residuals (errors) are close to zero and large errors are rare. A Q-Q plot can be used to conduct the test of normality.
+
+A Quantile-Quantile (Q-Q) plot is a scatterplot of the quantiles of the residuals against the quantiles of a normal distribution. Quantiles are statistical values that divide a dataset or probability distribution into equal-sized intervals. They help in understanding how data is distributed by marking specific points that separate the data into groups of equal size. Examples of quantiles include: quartiles (4 equal parts), percentiles (100 equal parts), deciles (10 equal parts), etc.
+
+If the points in the Q-Q plot fall along a straight line, then the normality assumption is satisfied. If the points in the Q-Q plot do not fall along a straight line, then the normality assumption is not satisfied.
+
+```{r test_of_normality, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+plot(mlr_test, which = 2)
+```
+
+## [**Test of Homoscedasticity**]{.underline}
+
+Homoscedasticity requires that the spread of residuals should be constant across all levels of the independent variable. A scale-location plot (a.k.a. spread-location plot) can be used to conduct a test of homoscedasticity.
+
+The x-axis shows the fitted (predicted) values from the model and the y-axis shows the square root of the standardized residuals. The red line is added to help visualize any patterns.
+
+In a model with homoscedastic errors (equal variance across all predicted values):
+
+-   Points should be randomly scattered around a horizontal line
+
+-   The smooth line should be approximately horizontal
+
+-   The vertical spread of points should be roughly equal across all fitted values
+
+-   No obvious patterns, funnels, or trends should be visible
+
+Points forming a cone shape that widens from left to right suggests heteroscedasticity with increasing variance for larger fitted values.
+
+```{r test_of_homoscedasticity, echo=TRUE, fig.width=6, message=FALSE, warning=FALSE}
+plot(mlr_test, which = 3)
+```
+
+
+```
+
+## [**Quantitative Validation of Assumptions**]{.underline}
+
+The graphical representations of the various tests of assumptions should be accompanied by quantitative values. The `gvlma` package (Global Validation of Linear Models Assumptions) is useful for this purpose.
+
+```{r QuantitativeValidationofAssumptions, echo=TRUE, message=FALSE, warning=FALSE, message=FALSE}
+pacman::p_load("gvlma")
+gvlma_results <- gvlma(mlr_test)
+summary(gvlma_results)
+```
+
+## Test of Multicollinearity
+
+Multicollinearity arises when two or more independent variables (predictors) are highly intercorrelated. The **Variance Inflation Factor (VIF)** quantifies how much the variance of a coefficient estimate is “inflated” due to multicollinearity. A VIF of 1 indicates no collinearity; values above 5 suggest problematic levels of collinearity. High VIF values (VIF \> 5) suggest that the coefficient estimates are less reliable due to the correlations between predictors.
+
+```{r multicollinearity, echo=TRUE, message=FALSE, warning=FALSE}
+pacman::p_load("car")
+vif(mlr_test)
+```
+
+# Interpretation of the Results
+
+## Academic Statement
+
+A simultaneous multiple linear regression analysis was conducted on data from 10 observations (N=10) to examine whether advertising expenditures on YouTube, TikTok, and Facebook collectively predict Sales. The results indicated that neither expenses on YouTube ($\beta$ = 0.01, 95% CI [-.03, .04], SE = 0.02, *t*(6) = 0.38, *p* = .715), nor TikTok ($\beta$ = -0.01, 95% CI [-.09, .07], SE = 0.03, *t*(6) = -0.24, *p* = .820) nor Facebook ($\beta$ = 0.06, 95% CI [-.06, .18], SE = 0.05, *t*(6) = 1.28, *p* = .249) individually significantly predicted Sales (all *p* \> 0.05). The model explained 97.34% of the variance in Sales (Multiple R^2^ = .97, Adjusted R^2^ = .96, *F*(3, 6) = 73.32, *p* \< .001). The intercept was 32.02, 95% CI [-27.76, 91.80], SE = 24.43, *t*(6) = 1.31, *p* = .238. The residual standard error was 1.2, indicating a robust model. The full results are presented in the table below.
+
+|  Predictor  | $\beta$ |     95% CI      |  SE   | *t*(6) | *p*  |
+|:-----------:|:-------:|:---------------:|:-----:|:------:|:----:|
+| (Intercept) |  32.02  | [-27.76, 91.80] | 24.43 |  1.31  | .238 |
+|   YouTube   |  0.01   |   [-.03, .04]   | 0.02  |  0.38  | .715 |
+|   TikTok    |  -0.01  |   [-.09, .07]   | 0.03  | -0.24  | .820 |
+|  Facebook   |  0.06   |   [-.06, .18]   | 0.05  |  1.28  | .249 |
+
+: Regression Coefficients Predicting Sales from Multiple Advertising Channels
+
+***Note.*** N = 10; SE = standard error; CI = confidence interval.
+
+Even though the results indicated a robust model whereby advertisement expenditures collectively predict sales, individual parameter estimates did not reach statistical significance when controlling for the other parameters. This suggests that the advertising channels collectively explain variation in Sales but do not uniquely predict Sales in this small sample. This may reflect multicollinearity among the different advertising platforms or limited statistical power due to the small sample size (*N* = 10). Future research should investigate these predictors with a larger sample and assess potential collinearity.
+
+## Business Analysis
+
+Although aggregate digital advertising spend across YouTube, TikTok, and Facebook is highly predictive of Sales (accounting for nearly all observed variation), the absence of statistically significant individual coefficients indicates that no single channel can be reliably credited with driving incremental Sales in this dataset. This finding suggests that, within the current investment levels and the constraints of a small sample, the three platforms function as a cohesive portfolio rather than as independent drivers of sales revenue. Recommendation for management:
+
+1.  Continue to view YouTube, TikTok, and Facebook as complementary elements of a unified digital marketing strategy focusing on the total expenditure rather than favouring a single platform.
+
+## Limitations
+
+1.  Small Sample Size (N = 10): Using a limited number of observations restricts statistical power and inflates standard errors, raising the risk of a Type II error (failing to detect true channel effects).
+
+2.  Potential Multicollinearity: High intercorrelations among YouTube, TikTok, and Facebook expenditures may obscure unique contributions.
+
+3.  Restricted Expenditure Range: Limited range of advertisement expenditures impairs the ability to detect linear effects.
+
+4.  Methodology: Lack of experimental variation in advertisement expenditure limits causal attribution to any single platform.
